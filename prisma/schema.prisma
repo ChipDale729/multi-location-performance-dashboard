@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String    @id
+  name      String
+
+  locations    Location[]
+  users        User[]
+  metricEvents MetricEvent[]
+  actionItems  ActionItem[]
+}
+
+model Location {
+  id     String @id
+  orgId  String
+  name   String
+  region String
+
+  org         Organization       @relation(fields: [orgId], references: [id])
+  metricEvents MetricEvent[]
+  actionItems  ActionItem[]
+
+  @@index([orgId])
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  VIEWER
+}
+
+model User {
+  id    String   @id
+  orgId String
+  email String   @unique
+  name  String
+  role  UserRole
+
+  assignedActionItems ActionItem[]
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+
+enum MetricType {
+  REVENUE
+  ORDERS
+  FOOTFALL
+  DOWNTIME_MINUTES
+  UNITS_PRODUCED
+  TICKETS_OPENED
+  TICKETS_CLOSED
+}
+
+enum MetricSource {
+  API
+  CSV
+  SEED
+}
+
+model MetricEvent {
+  eventId    String      @id
+  orgId      String
+  locationId String
+  timestamp  DateTime
+  metricType MetricType
+  value      Float
+  source     MetricSource
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  location Location      @relation(fields: [locationId], references: [id])
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([timestamp])
+}
+
+enum ActionStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+model ActionItem {
+  id             Int          @id
+  orgId          String
+  locationId     String
+  title          String
+  description    String?
+  status         ActionStatus @default(OPEN)
+  metricType     MetricType?
+  timestamp      DateTime     @default(now())
+  assigneeUserId String?
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  location Location     @relation(fields: [locationId], references: [id])
+  assignee User?        @relation(fields: [assigneeUserId], references: [id])
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([status])
+  @@index([timestamp])
+}
