@@ -54,7 +54,7 @@ CREATE TABLE "MetricEvent" (
 
 -- CreateTable
 CREATE TABLE "ActionItem" (
-    "id" SERIAL NOT NULL,
+    "id" INTEGER NOT NULL,
     "orgId" TEXT NOT NULL,
     "locationId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -65,6 +65,28 @@ CREATE TABLE "ActionItem" (
     "assigneeUserId" TEXT,
 
     CONSTRAINT "ActionItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DailyMetricRollup" (
+    "orgId" TEXT NOT NULL,
+    "locationId" TEXT NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "metricType" "MetricType" NOT NULL,
+    "value" DOUBLE PRECISION NOT NULL,
+    "avg7" DOUBLE PRECISION,
+    "prior7Avg" DOUBLE PRECISION,
+
+    CONSTRAINT "DailyMetricRollup_pkey" PRIMARY KEY ("orgId","locationId","date","metricType")
+);
+
+-- CreateTable
+CREATE TABLE "RollupRecomputeQueue" (
+    "orgId" TEXT NOT NULL,
+    "minDate" TIMESTAMP(3) NOT NULL,
+    "maxDate" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "RollupRecomputeQueue_pkey" PRIMARY KEY ("orgId")
 );
 
 -- CreateIndex
@@ -97,6 +119,18 @@ CREATE INDEX "ActionItem_status_idx" ON "ActionItem"("status");
 -- CreateIndex
 CREATE INDEX "ActionItem_timestamp_idx" ON "ActionItem"("timestamp");
 
+-- CreateIndex
+CREATE INDEX "DailyMetricRollup_orgId_date_idx" ON "DailyMetricRollup"("orgId", "date");
+
+-- CreateIndex
+CREATE INDEX "DailyMetricRollup_locationId_date_idx" ON "DailyMetricRollup"("locationId", "date");
+
+-- CreateIndex
+CREATE INDEX "RollupRecomputeQueue_minDate_idx" ON "RollupRecomputeQueue"("minDate");
+
+-- CreateIndex
+CREATE INDEX "RollupRecomputeQueue_maxDate_idx" ON "RollupRecomputeQueue"("maxDate");
+
 -- AddForeignKey
 ALTER TABLE "Location" ADD CONSTRAINT "Location_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -117,3 +151,12 @@ ALTER TABLE "ActionItem" ADD CONSTRAINT "ActionItem_locationId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "ActionItem" ADD CONSTRAINT "ActionItem_assigneeUserId_fkey" FOREIGN KEY ("assigneeUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DailyMetricRollup" ADD CONSTRAINT "DailyMetricRollup_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DailyMetricRollup" ADD CONSTRAINT "DailyMetricRollup_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RollupRecomputeQueue" ADD CONSTRAINT "RollupRecomputeQueue_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

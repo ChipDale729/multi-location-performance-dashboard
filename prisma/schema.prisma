@@ -8,13 +8,15 @@ datasource db {
 }
 
 model Organization {
-  id        String    @id
-  name      String
+  id   String @id
+  name String
 
-  locations    Location[]
-  users        User[]
-  metricEvents MetricEvent[]
-  actionItems  ActionItem[]
+  locations            Location[]
+  users                User[]
+  metricEvents         MetricEvent[]
+  actionItems          ActionItem[]
+  DailyMetricRollup    DailyMetricRollup[]
+  RollupRecomputeQueue RollupRecomputeQueue[]
 }
 
 model Location {
@@ -23,9 +25,10 @@ model Location {
   name   String
   region String
 
-  org         Organization       @relation(fields: [orgId], references: [id])
-  metricEvents MetricEvent[]
-  actionItems  ActionItem[]
+  org               Organization        @relation(fields: [orgId], references: [id])
+  metricEvents      MetricEvent[]
+  actionItems       ActionItem[]
+  DailyMetricRollup DailyMetricRollup[]
 
   @@index([orgId])
 }
@@ -50,7 +53,6 @@ model User {
   @@index([orgId])
 }
 
-
 enum MetricType {
   REVENUE
   ORDERS
@@ -68,7 +70,7 @@ enum MetricSource {
 }
 
 model MetricEvent {
-  eventId    String      @id
+  eventId    String       @id
   orgId      String
   locationId String
   timestamp  DateTime
@@ -77,7 +79,7 @@ model MetricEvent {
   source     MetricSource
 
   org      Organization @relation(fields: [orgId], references: [id])
-  location Location      @relation(fields: [locationId], references: [id])
+  location Location     @relation(fields: [locationId], references: [id])
 
   @@index([orgId])
   @@index([locationId])
@@ -109,4 +111,33 @@ model ActionItem {
   @@index([locationId])
   @@index([status])
   @@index([timestamp])
+}
+
+model DailyMetricRollup {
+  orgId      String
+  locationId String
+  date       DateTime
+  metricType MetricType
+
+  value     Float
+  avg7      Float?
+  prior7Avg Float?
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  location Location     @relation(fields: [locationId], references: [id])
+
+  @@id([orgId, locationId, date, metricType])
+  @@index([orgId, date])
+  @@index([locationId, date])
+}
+
+model RollupRecomputeQueue {
+  orgId   String   @id
+  minDate DateTime
+  maxDate DateTime
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@index([minDate])
+  @@index([maxDate])
 }
