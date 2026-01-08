@@ -33,6 +33,12 @@ export async function recomputeDailyRollups(params: {
     }),
   ]);
 
+  const metricTypeCounts = new Map<string, number>();
+  for (const ev of events) {
+    metricTypeCounts.set(ev.metricType as any, (metricTypeCounts.get(ev.metricType as any) ?? 0) + 1);
+  }
+  console.log("metricTypeCounts", Array.from(metricTypeCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,20));
+
   const locationIds = locations.map((l) => l.id);
 
   // (location, metric, day)
@@ -51,6 +57,9 @@ export async function recomputeDailyRollups(params: {
     for (const locationId of locationIds) {
       for (const metricType of METRICS) {
         const value = daily.get(`${locationId}|${metricType}|${dayStr}`) ?? 0;
+
+        // Skip days with no data
+        if (value === 0) continue;
 
         let sum7 = 0;
         for (let i = 0; i < 7; i++) {
