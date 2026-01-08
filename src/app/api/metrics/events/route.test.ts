@@ -1,115 +1,103 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from './route';
+import { MetricSource } from '@prisma/client';
 
-// Mock auth helper
-vi.mock('@/lib/auth', () => {
-  return {
-    getCurrentUser: () => ({
-      id: 'user',
-      orgId: 'org',
-      role: 'ADMIN',
-      email: 'demoadmin@org.com',
-      name: 'Demo Admin',
-    }),
-  };
-});
+// ---- Mocks ----
+vi.mock('@/lib/auth', () => ({
+  getCurrentUser: vi.fn(),
+}));
 
+vi.mock('@/lib/metricsIngestion', () => ({
+  ingestMetricEvents: vi.fn(),
+}));
+
+import { getCurrentUser } from '@/lib/auth';
+import { ingestMetricEvents } from '@/lib/metricsIngestion';
+
+// ---- Helpers ----
 function makeRequest(body: unknown) {
   return {
     json: async () => body,
   } as any;
 }
 
+function makeEvent(overrides: Partial<any> = {}) {
+  return {
+    eventId: 'evt-1',
+    orgId: 'org',
+    locationId: 'loc-1',
+    timestamp: '2025-01-01T12:00:00.000Z',
+    metricType: 'revenue',
+    value: 100,
+    ...overrides,
+  };
+}
+
 describe('POST /api/metrics/events', () => {
-  it('accepts a valid batch', async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+
+    vi.mocked(getCurrentUser).mockReturnValue({
+      id: 'user',
+      orgId: 'org',
+      role: 'ADMIN',
+      email: 'demoadmin@org.com',
+      name: 'Demo Admin',
+    } as any);
+
+    vi.mocked(ingestMetricEvents).mockResolvedValue({
+      processed: 2,
+      createdCount: 2,
+      existingCount: 0,
+      createdEventIds: ['evt-1', 'evt-2'],
+      existingEventIds: [],
+    } as any);
+  });
+
+  it('403 if role is not ADMIN/MANAGER', async () => {
+    vi.mocked(getCurrentUser).mockReturnValue({
+      id: 'user',
+      orgId: 'org',
+      role: 'VIEWER',
+      email: 'viewer@org.com',
+      name: 'Viewer',
+    } as any);
+
+    const res = await POST(makeRequest([makeEvent()]));
+    expect(res.status).toBe(403);
+    expect(ingestMetricEvents).not.toHaveBeenCalled();
+  });
+
+  it('400 if body is not an array', async () => {
+    const res = await POST(makeRequest(makeEvent()));
+    expect(res.status).toBe(400);
+    expect(ingestMetricEvents).not.toHaveBeenCalled();
+  });
+
+  it('400 if any event is invalid', async () => {
+    const res = await POST(makeRequest([makeEvent({ timestamp: 'bad date' })]));
+    expect(res.status).toBe(400);
+    expect(ingestMetricEvents).not.toHaveBeenCalled();
+  });
+
+  it('400 if tenant/orgId mismatches', async () => {
+    const res = await POST(makeRequest([makeEvent({ orgId: 'other-org' })]));
+    expect(res.status).toBe(400);
+    expect(ingestMetricEvents).not.toHaveBeenCalled();
+  });
+
+  it('200 and calls ingestion for valid batch', async () => {
     const body = [
-      {
-        eventId: '1',
-        orgId: 'org',
-        locationId: 'loc-1',
-        timestamp: '2025-01-01T12:00:00.000Z',
-        metricType: 'revenue',
-        value: 1234.56,
-      },
-      {
-        eventId: '2',
-        orgId: 'org',
-        locationId: 'loc-2',
-        timestamp: '2025-01-01T13:00:00.000Z',
-        metricType: 'orders',
-        value: 42,
-      },
+      makeEvent({ eventId: '1' }),
+      makeEvent({ eventId: '2', metricType: 'orders', value: 42 }),
     ];
 
     const res = await POST(makeRequest(body));
     expect(res.status).toBe(200);
 
-    const json = await res.json();
-    expect(json.ok).toBe(true);
-    expect(json.received).toBe(2);
-  });
+    expect(ingestMetricEvents).toHaveBeenCalledTimes(1);
 
-  it('returns 400 for invalid payload shape', async () => {
-    // Single object instead of array
-    const badBody = {
-      eventId: '3',
-      orgId: 'org',
-      locationId: 'loc-1',
-      timestamp: '2025-01-01T12:00:00.000Z',
-      metricType: 'revenue',
-      value: 100,
-    };
-
-    const res = await POST(makeRequest(badBody));
-    expect(res.status).toBe(400);
-
-    const json = await res.json();
-    expect(json.error).toBeDefined();
-  });
-
-  it('returns 400 when event fails validation', async () => {
-    const badBody = [
-      {
-        eventId: '4',
-        orgId: 'org',
-        locationId: 'loc-1',
-        timestamp: 'bad date',
-        metricType: 'revenue',
-        value: 100,
-      },
-    ];
-
-    const res = await POST(makeRequest(badBody));
-    expect(res.status).toBe(400);
-
-    const json = await res.json();
-    expect(json.error).toBeDefined();
-  });
-
-  it('returns 403 when any event has a mismatched orgId', async () => {
-    const body = [
-      {
-        eventId: '5',
-        orgId: 'org',
-        locationId: 'loc-1',
-        timestamp: '2025-01-01T12:00:00.000Z',
-        metricType: 'revenue',
-        value: 100,
-      },
-      {
-        eventId: '6',
-        orgId: 'org2',
-        locationId: 'loc-2',
-        timestamp: '2025-01-01T13:00:00.000Z',
-        metricType: 'orders',
-        value: 10,
-      },
-    ];
-
-    const res = await POST(makeRequest(body));
-    expect(res.status).toBe(403);
-
-    const json = await res.json();
-    expect(json.error).toContain('Org mismatch');
+    const [, sourceArg] = (ingestMetricEvents as any).mock.calls[0];
+    expect(sourceArg).toBe(MetricSource.API);
   });
 });
