@@ -15,6 +15,8 @@ export default function Home() {
   const [seedOutput, setSeedOutput] = useState<string>("");
   const [recomputeLoading, setRecomputeLoading] = useState(false);
   const [recomputeOutput, setRecomputeOutput] = useState<string>("");
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvOutput, setCsvOutput] = useState<string>("");
 
   // Redirect to login if not authenticated
   if (status === 'loading') {
@@ -79,6 +81,35 @@ Summary:
     }
   }
 
+  async function handleCsvUpload(file: File) {
+    setCsvLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/metrics/csv', { method: 'POST', body: formData });
+      const json = await res.json();
+
+      if (res.ok) {
+        setCsvOutput(`
+CSV Import Successful!
+
+Summary:
+• Parsed rows: ${json.parsed}
+• Valid events: ${json.valid}
+• Invalid rows: ${json.invalid}
+• Processed: ${json.processed}
+• Created: ${json.createdCount}
+• Existing: ${json.existingCount}`);
+      } else {
+        setCsvOutput(`Error: ${json.error}\nDetails: ${json.details || json.errors?.join(', ')}`);
+      }
+    } catch (e: any) {
+      setCsvOutput(`Error: ${String(e)}`);
+    } finally {
+      setCsvLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header with Navigation */}
@@ -104,6 +135,26 @@ Summary:
                 >
                   {recomputeLoading ? 'Recomputing...' : 'Recompute Rollups'}
                 </button>
+                <label className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 font-medium cursor-pointer">
+                  <input
+                    ref={(el) => {
+                      if (el && csvOutput) {
+                        el.value = '';
+                      }
+                    }}
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        handleCsvUpload(e.target.files[0]);
+                        e.target.value = '';
+                      }
+                    }}
+                    disabled={csvLoading}
+                    className="hidden"
+                  />
+                  {csvLoading ? 'Uploading...' : 'Upload CSV'}
+                </label>
               </div>
             )}
           </div>
@@ -155,6 +206,12 @@ Summary:
           <div className="max-w-7xl mx-auto px-8 py-2 text-sm text-slate-700">
             {recomputeOutput}
             <button onClick={() => setRecomputeOutput("")} className="ml-3 text-slate-600 hover:text-slate-900">Clear</button>
+          </div>
+        )}
+        {csvOutput && (
+          <div className="max-w-7xl mx-auto px-8 py-2 text-sm text-slate-700">
+            {csvOutput}
+            <button onClick={() => setCsvOutput("")} className="ml-3 text-slate-600 hover:text-slate-900">Clear</button>
           </div>
         )}
       </div>

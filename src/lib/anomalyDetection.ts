@@ -2,6 +2,70 @@ import { prisma } from '@/lib/db';
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
+export async function generateAnomaliesForSeed(orgId: string): Promise<number> {
+  const locations = await prisma.location.findMany({ where: { orgId }, select: { id: true } });
+  if (locations.length === 0) return 0;
+
+  const rollups = await prisma.dailyMetricRollup.findMany({ where: { orgId } });
+  if (rollups.length === 0) return 0;
+
+  const metrics = ['REVENUE', 'ORDERS', 'FOOTFALL', 'DOWNTIME_MINUTES', 'UNITS_PRODUCED', 'TICKETS_OPENED', 'TICKETS_CLOSED'];
+  const rules = ['sudden_drop', 'spike', 'below_avg'];
+  const severities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+
+  let count = 0;
+  for (let i = 0; i < 10; i++) {
+    const loc = locations[Math.floor(Math.random() * locations.length)];
+    const metric = metrics[Math.floor(Math.random() * metrics.length)];
+    const rule = rules[Math.floor(Math.random() * rules.length)];
+    const severity = severities[Math.floor(Math.random() * severities.length)];
+    const value = Math.random() * 1000;
+    const threshold = Math.random() * 1000;
+
+    await (prisma as any).anomaly.create({
+      data: {
+        orgId,
+        locationId: loc.id,
+        metricType: metric,
+        rule,
+        severity,
+        value,
+        threshold,
+        detectedAt: new Date(),
+      },
+    });
+    count++;
+  }
+  return count;
+}
+
+export async function generateActionItemsForSeed(orgId: string): Promise<number> {
+  const anomalies = await (prisma as any).anomaly.findMany({
+    where: { orgId, actionItemId: null },
+    take: 10,
+  });
+
+  let count = 0;
+  for (const anom of anomalies) {
+    const actionItem = await prisma.actionItem.create({
+      data: {
+        orgId,
+        locationId: anom.locationId,
+        title: `${anom.metricType} anomaly at location`,
+        description: `${anom.rule}: ${anom.value.toFixed(1)} vs ${anom.threshold.toFixed(1)}`,
+        status: 'OPEN',
+      },
+    });
+
+    await (prisma as any).anomaly.update({
+      where: { id: anom.id },
+      data: { actionItemId: actionItem.id },
+    });
+    count++;
+  }
+  return count;
+}
+
 // Compact rule definition: compute baseline once, apply generic drop/severity logic
 const RULES = [
 	{ key: 'sudden_drop_avg7', getBaseline: (r: any) => r.avg7 as number | null },

@@ -1,0 +1,11 @@
+locationId,metricType,timestamp,value
+loc-ny-1,revenue,2026-01-08T12:00:00Z,1450.75
+loc-ny-2,orders,2026-01-08T12:00:00Z,52
+loc-bos-1,footfall,2026-01-08T12:00:00Z,145
+loc-bos-2,downtime_minutes,2026-01-08T12:00:00Z,12
+loc-sf-1,units_produced,2026-01-08T12:00:00Z,215
+loc-sf-2,tickets_opened,2026-01-08T12:00:00Z,18
+loc-la-1,tickets_closed,2026-01-08T12:00:00Z,16
+loc-la-2,revenue,2026-01-08T12:00:00Z,1620.50
+loc-ny-1,orders,2026-01-08T12:00:00Z,48
+loc-bos-1,footfall,2026-01-08T12:00:00Z,152

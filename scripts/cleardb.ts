@@ -7,6 +7,7 @@ async function main() {
     prisma.dailyMetricRollup.deleteMany(),
     prisma.rollupRecomputeQueue.deleteMany(),
     prisma.metricEvent.deleteMany(),
+    (prisma as any).anomaly.deleteMany(),
     prisma.actionItem.deleteMany(),
     prisma.user.deleteMany(),
     prisma.location.deleteMany(),

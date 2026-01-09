@@ -28,6 +28,13 @@ interface ActionItem {
 	timestamp: string;
 }
 
+interface OrgUser {
+	id: string;
+	email: string;
+	name: string;
+	role: string;
+}
+
 const STATUSES = ["OPEN", "IN_PROGRESS", "CLOSED"] as const;
 const STATUS_LABEL = (s: string) => (s === "IN_PROGRESS" ? "IN PROGRESS" : s);
 const severityClass = (s: string) =>
@@ -39,11 +46,12 @@ const severityClass = (s: string) =>
 		? "bg-yellow-200 text-yellow-900"
 		: "bg-blue-200 text-blue-900";
 const ANOMALY_HEADERS = ["Location", "Metric", "Rule", "Severity", "Value", "Status", "Action"];
-const ACTION_HEADERS = ["Location", "Title", "Assigned To", "Created", "Status"];
+const ACTION_HEADERS = ["Location", "Title", "Assigned To", "Created", "Status", "Assignee"];
 
 export default function OpsQueuePage() {
 	const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
 	const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+	const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [anomalyFilter, setAnomalyFilter] = useState<string>("OPEN");
@@ -51,21 +59,25 @@ export default function OpsQueuePage() {
 	const { data: session } = useSession();
 	const user = session?.user as any;
 	const isViewer = user?.role === 'VIEWER';
+	const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
 
 	const fetchData = async () => {
 		try {
-			const [anomRes, itemRes] = await Promise.all([
+			const [anomRes, itemRes, usersRes] = await Promise.all([
 				fetch("/api/anomalies"),
 				fetch("/api/action-items"),
+				fetch("/api/admin/users"),
 			]);
 
 			if (!anomRes.ok || !itemRes.ok) throw new Error("Failed to fetch");
 
 			const anomData = await anomRes.json();
 			const itemData = await itemRes.json();
+			const usersData = usersRes.ok ? await usersRes.json() : { users: [] };
 
 			setAnomalies(anomData.anomalies);
 			setActionItems(itemData.actionItems);
+			setOrgUsers(usersData.users || []);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Unknown error");
 		} finally {
@@ -96,6 +108,27 @@ export default function OpsQueuePage() {
 			await fetchData();
 		} catch (err) {
 			alert("Failed to update status");
+		}
+	};
+
+	const handleAssigneeChange = async (itemId: number, assigneeUserId: string | null) => {
+		if (!isManager) {
+			alert('Only managers can assign items');
+			return;
+		}
+		try {
+			const res = await fetch("/api/action-items", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ id: itemId, assigneeUserId: assigneeUserId || null }),
+			});
+
+			if (!res.ok) throw new Error("Update failed");
+
+			// Refetch to get latest data
+			await fetchData();
+		} catch (err) {
+			alert("Failed to assign action item");
 		}
 	};
 
@@ -266,7 +299,7 @@ export default function OpsQueuePage() {
 									{ACTION_HEADERS.map((h) => (
 										<th
 											key={h}
-											className={`px-4 py-3 ${h === "Status" ? "text-center" : "text-left"} text-xs font-bold bg-gray-100 text-black`}
+											className={`px-4 py-3 ${(h === "Status" || h === "Assignee") ? "text-center" : "text-left"} text-xs font-bold bg-gray-100 text-black`}
 										>
 											{h}
 										</th>
@@ -276,7 +309,7 @@ export default function OpsQueuePage() {
 							<tbody>
 								{filteredActionItems.length === 0 ? (
 									<tr>
-										<td colSpan={5} className="px-4 py-4 text-center text-gray-500">
+										<td colSpan={6} className="px-4 py-4 text-center text-gray-500">
 											No action items
 										</td>
 									</tr>
@@ -310,6 +343,24 @@ export default function OpsQueuePage() {
 																<option key={s} value={s}>{STATUS_LABEL(s)}</option>
 															))}
 														</select>
+													)}
+												</td>
+												<td className="px-4 py-3 text-center">
+													{isViewer ? (
+														<span className="text-xs text-slate-500">View only</span>
+													) : isManager ? (
+														<select
+															value={item.assigneeUserId || ''}
+															onChange={(e) => handleAssigneeChange(item.id, e.target.value || null)}
+															className="px-2 py-1 border border-gray-300 bg-white text-black text-xs rounded"
+														>
+															<option value="">Unassigned</option>
+															{orgUsers.map((u) => (
+																<option key={u.id} value={u.id}>{u.name}</option>
+															))}
+														</select>
+													) : (
+														<span className="text-xs text-slate-500">-</span>
 													)}
 												</td>
 										</tr>

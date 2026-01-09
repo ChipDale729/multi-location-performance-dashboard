@@ -8,49 +8,150 @@ datasource db {
 }
 
 model Organization {
-  id   String @id
-  name String
-
-  locations            Location[]
-  users                User[]
-  metricEvents         MetricEvent[]
+  id                   String                @id
+  name                 String
   actionItems          ActionItem[]
+  anomalies            Anomaly[]
   DailyMetricRollup    DailyMetricRollup[]
-  RollupRecomputeQueue RollupRecomputeQueue[]
+  locations            Location[]
+  locationAccess       LocationAccess[]
+  metricEvents         MetricEvent[]
+  RollupRecomputeQueue RollupRecomputeQueue?
+  users                User[]
 }
 
 model Location {
-  id     String @id
-  orgId  String
-  name   String
-  region String
-
-  org               Organization        @relation(fields: [orgId], references: [id])
-  metricEvents      MetricEvent[]
+  id                String              @id
+  orgId             String
+  name              String
+  region            String
   actionItems       ActionItem[]
+  anomalies         Anomaly[]
   DailyMetricRollup DailyMetricRollup[]
+  org               Organization        @relation(fields: [orgId], references: [id])
+  access            LocationAccess[]
+  metricEvents      MetricEvent[]
 
   @@index([orgId])
+}
+
+model User {
+  id                  String           @id
+  orgId               String
+  email               String           @unique
+  name                String
+  role                UserRole
+  password            String
+  assignedActionItems ActionItem[]
+  locationAccess      LocationAccess[]
+  org                 Organization     @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+model MetricEvent {
+  eventId    String       @id
+  orgId      String
+  locationId String
+  timestamp  DateTime
+  metricType MetricType
+  value      Float
+  source     MetricSource
+  location   Location     @relation(fields: [locationId], references: [id])
+  org        Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([timestamp])
+}
+
+model Anomaly {
+  id           Int             @id @default(autoincrement())
+  orgId        String
+  locationId   String
+  metricType   MetricType
+  rule         String
+  severity     AnomalySeverity
+  value        Float
+  threshold    Float
+  detectedAt   DateTime        @default(now())
+  status       ActionStatus    @default(OPEN)
+  actionItemId Int?
+  actionItem   ActionItem?     @relation(fields: [actionItemId], references: [id])
+  location     Location        @relation(fields: [locationId], references: [id])
+  org          Organization    @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([detectedAt])
+  @@index([status])
+}
+
+model ActionItem {
+  id             Int          @id @default(autoincrement())
+  orgId          String
+  locationId     String
+  title          String
+  description    String?
+  status         ActionStatus @default(OPEN)
+  metricType     MetricType?
+  timestamp      DateTime     @default(now())
+  assigneeUserId String?
+  assignee       User?        @relation(fields: [assigneeUserId], references: [id])
+  location       Location     @relation(fields: [locationId], references: [id])
+  org            Organization @relation(fields: [orgId], references: [id])
+  anomalies      Anomaly[]
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([status])
+  @@index([timestamp])
+}
+
+model DailyMetricRollup {
+  orgId      String
+  locationId String
+  date       DateTime
+  metricType MetricType
+  value      Float
+  avg7       Float?
+  prior7Avg  Float?
+  location   Location     @relation(fields: [locationId], references: [id])
+  org        Organization @relation(fields: [orgId], references: [id])
+
+  @@id([orgId, locationId, date, metricType])
+  @@index([orgId, date])
+  @@index([locationId, date])
+}
+
+model RollupRecomputeQueue {
+  orgId   String       @id
+  minDate DateTime
+  maxDate DateTime
+  org     Organization @relation(fields: [orgId], references: [id])
+
+  @@index([minDate])
+  @@index([maxDate])
+}
+
+model LocationAccess {
+  id         String       @id @default(cuid())
+  orgId      String
+  userId     String
+  locationId String
+  location   Location     @relation(fields: [locationId], references: [id])
+  org        Organization @relation(fields: [orgId], references: [id])
+  user       User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, locationId])
+  @@index([orgId])
+  @@index([locationId])
 }
 
 enum UserRole {
   ADMIN
   MANAGER
   VIEWER
-}
-
-model User {
-  id    String   @id
-  orgId String
-  email String   @unique
-  name  String
-  role  UserRole
-
-  assignedActionItems ActionItem[]
-
-  org Organization @relation(fields: [orgId], references: [id])
-
-  @@index([orgId])
 }
 
 enum MetricType {
@@ -69,75 +170,15 @@ enum MetricSource {
   SEED
 }
 
-model MetricEvent {
-  eventId    String       @id
-  orgId      String
-  locationId String
-  timestamp  DateTime
-  metricType MetricType
-  value      Float
-  source     MetricSource
-
-  org      Organization @relation(fields: [orgId], references: [id])
-  location Location     @relation(fields: [locationId], references: [id])
-
-  @@index([orgId])
-  @@index([locationId])
-  @@index([timestamp])
-}
-
 enum ActionStatus {
   OPEN
   IN_PROGRESS
   CLOSED
 }
 
-model ActionItem {
-  id             Int          @id
-  orgId          String
-  locationId     String
-  title          String
-  description    String?
-  status         ActionStatus @default(OPEN)
-  metricType     MetricType?
-  timestamp      DateTime     @default(now())
-  assigneeUserId String?
-
-  org      Organization @relation(fields: [orgId], references: [id])
-  location Location     @relation(fields: [locationId], references: [id])
-  assignee User?        @relation(fields: [assigneeUserId], references: [id])
-
-  @@index([orgId])
-  @@index([locationId])
-  @@index([status])
-  @@index([timestamp])
-}
-
-model DailyMetricRollup {
-  orgId      String
-  locationId String
-  date       DateTime
-  metricType MetricType
-
-  value     Float
-  avg7      Float?
-  prior7Avg Float?
-
-  org      Organization @relation(fields: [orgId], references: [id])
-  location Location     @relation(fields: [locationId], references: [id])
-
-  @@id([orgId, locationId, date, metricType])
-  @@index([orgId, date])
-  @@index([locationId, date])
-}
-
-model RollupRecomputeQueue {
-  orgId   String   @id
-  minDate DateTime
-  maxDate DateTime
-
-  org Organization @relation(fields: [orgId], references: [id])
-
-  @@index([minDate])
-  @@index([maxDate])
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }

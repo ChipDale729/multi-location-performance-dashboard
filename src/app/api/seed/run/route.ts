@@ -127,6 +127,11 @@ export async function POST(req: NextRequest) {
 
   const result = await ingestMetricEvents(validEvents as any, MetricSource.SEED);
 
+  // Generate anomalies and action items
+  const { generateAnomaliesForSeed, generateActionItemsForSeed } = await import('@/lib/anomalyDetection');
+  const anomaliesCount = await generateAnomaliesForSeed(orgId);
+  const actionItemsCount = await generateActionItemsForSeed(orgId);
+
   return NextResponse.json({
     ok: true,
     days,
@@ -134,5 +139,7 @@ export async function POST(req: NextRequest) {
     processed: result.processed,
     createdCount: result.createdCount,
     existingCount: result.existingCount,
+    anomalies: anomaliesCount,
+    actionItems: actionItemsCount,
   });
 }

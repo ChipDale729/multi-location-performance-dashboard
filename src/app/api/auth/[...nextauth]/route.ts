@@ -15,7 +15,6 @@ const authOptions = {
       async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) {
-            console.log('Missing credentials');
             return null;
           }
 
@@ -28,7 +27,6 @@ const authOptions = {
           });
 
           if (!user) {
-            console.log('User not found:', credentials.email);
             return null;
           }
 
@@ -38,11 +36,8 @@ const authOptions = {
           });
           
           if (!isValid) {
-            console.log('Invalid password for:', credentials.email);
             return null;
           }
-
-          console.log('Auth successful for:', user.email);
           return {
             id: user.id,
             email: user.email,
@@ -59,30 +54,20 @@ const authOptions = {
   ],
   callbacks: {
     async jwt({ token, user }: any) {
-      try {
-        if (user) {
-          token.id = user.id;
-          token.role = user.role;
-          token.orgId = user.orgId;
-        }
-        return token;
-      } catch (error) {
-        console.error('JWT callback error:', error);
-        return token;
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+        token.orgId = user.orgId;
       }
+      return token;
     },
     async session({ session, token }: any) {
-      try {
-        if (session.user) {
-          (session.user as any).id = token.id;
-          (session.user as any).role = token.role;
-          (session.user as any).orgId = token.orgId;
-        }
-        return session;
-      } catch (error) {
-        console.error('Session callback error:', error);
-        return session;
+      if (session.user) {
+        (session.user as any).id = token.id;
+        (session.user as any).role = token.role;
+        (session.user as any).orgId = token.orgId;
       }
+      return session;
     },
   },
   pages: {
