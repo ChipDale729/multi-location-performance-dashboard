@@ -73,6 +73,12 @@ export default function LocationDetailPage({
 	const selectedMetricData = data.metrics.find(
 		(m) => m.metricType === selectedMetric
 	);
+	const metricTitle = selectedMetricData
+		? `${selectedMetricData.metricType
+				.toLowerCase()
+				.replace(/_/g, ' ')
+				.replace(/\b\w/g, (c) => c.toUpperCase())} History`
+		: 'History';
 
 	return (
 		<div className="p-8 bg-slate-50 min-h-screen">
@@ -118,7 +124,7 @@ export default function LocationDetailPage({
 								valueColor={selectedMetricData.percentageDiff > 0 ? "text-green-600" : "text-red-600"}
 							/>
 						</div>
-						<HistoryChart data={selectedMetricData.history} />
+						<HistoryChart data={selectedMetricData.history} title={metricTitle} />
 					</div>
 				)}
 			</div>

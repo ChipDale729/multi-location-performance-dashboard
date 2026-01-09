@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { MetricType } from '@prisma/client';
+import { detectAnomalies } from '@/lib/anomalyDetection';
 
 const METRICS = Object.values(MetricType) as MetricType[];
 
@@ -37,7 +38,6 @@ export async function recomputeDailyRollups(params: {
   for (const ev of events) {
     metricTypeCounts.set(ev.metricType as any, (metricTypeCounts.get(ev.metricType as any) ?? 0) + 1);
   }
-  console.log("metricTypeCounts", Array.from(metricTypeCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,20));
 
   const locationIds = locations.map((l) => l.id);
 
@@ -103,4 +103,14 @@ export async function recomputeDailyRollups(params: {
   }
 
   return { upserted };
+}
+
+export async function recomputeAndDetect(params: { orgId: string; startDate: Date; endDate: Date }) {
+  const result = await recomputeDailyRollups({
+    orgId: params.orgId,
+    startDate: params.startDate,
+    endDate: params.endDate,
+  });
+  await detectAnomalies(params.orgId);
+  return result;
 }

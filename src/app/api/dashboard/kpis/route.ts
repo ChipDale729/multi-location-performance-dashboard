@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getPermittedLocationIds, LocationAccessError } from '@/lib/auth';
 import { MetricType } from '@prisma/client';
 import { groupByMetric, getLatestByLocation, calculateTrend, computeAverage } from '@/lib/dashboardUtils';
 
@@ -30,19 +30,54 @@ function getLatestLocationValue(rollups: any[], locationId: string): LocationVal
 	return getLatestByLocation(rollups, locationId) as LocationValue | null;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
 	try {
-		const user = getCurrentUser();
+		const user = await getCurrentUser();
+		const { searchParams } = new URL(req.url);
+		const locationIds = searchParams.getAll('locationId');
+		const startDate = searchParams.get('startDate');
+		const endDate = searchParams.get('endDate');
 
-		const locations = await prisma.location.findMany({
-			where: { orgId: user.orgId },
-		});
+		let permitted: string[] | null = null;
+		try {
+			permitted = getPermittedLocationIds(user, locationIds);
+		} catch (err) {
+			if (err instanceof LocationAccessError) {
+				return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+			}
+			throw err;
+		}
+
+		const where: any = { orgId: user.orgId };
+
+		if (permitted) {
+			where.locationId = { in: permitted };
+		}
 
 		const thirtyDaysAgo = new Date();
 		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+		if (startDate) {
+			where.date = { ...where.date, gte: new Date(startDate) };
+		} else {
+			where.date = { ...where.date, gte: thirtyDaysAgo };
+		}
+
+		if (endDate) {
+			where.date = { ...where.date, lte: new Date(endDate) };
+		}
+
+		const locationWhere: any = { orgId: user.orgId };
+		if (permitted) {
+			locationWhere.id = { in: permitted };
+		}
+
+		const locations = await prisma.location.findMany({
+			where: locationWhere,
+		});
+
 		const rollups = await prisma.dailyMetricRollup.findMany({
-			where: { orgId: user.orgId, date: { gte: thirtyDaysAgo } },
+			where,
 			orderBy: { date: 'desc' },
 		});
 
@@ -91,9 +126,8 @@ export async function GET() {
 			});
 		});
 
-		return NextResponse.json({ ok: true, orgId: user.orgId, kpis });
+		return NextResponse.json({ kpis });
 	} catch (error) {
-		console.error('KPI fetch failed:', error);
 		return NextResponse.json({ error: 'Failed to fetch KPIs' }, { status: 500 });
 	}
 }

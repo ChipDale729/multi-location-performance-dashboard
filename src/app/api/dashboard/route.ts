@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth';
 
 export async function GET() {
 	try {
-		const user = getCurrentUser();
+		const user = await getCurrentUser();
 
 		const rollups = await prisma.dailyMetricRollup.findMany({
 			where: { orgId: user.orgId },

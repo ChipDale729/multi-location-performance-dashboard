@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, canAccessLocation } from '@/lib/auth';
 import { groupByMetric, computeAverage } from '@/lib/dashboardUtils';
 
 export async function GET(req: Request, { params }: { params: Promise<{ locationId: string }> }) {
 	try {
-		const user = getCurrentUser();
+		const user = await getCurrentUser();
 		const { locationId } = await params;
 
 		const location = await prisma.location.findUnique({ where: { id: locationId } });
 
 		if (!location || location.orgId !== user.orgId) {
 			return NextResponse.json({ error: 'Location not found' }, { status: 404 });
+		}
+
+		if (!canAccessLocation(user, locationId)) {
+			return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 		}
 
 		const ninetyDaysAgo = new Date();
@@ -74,7 +78,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ location
 			metrics,
 		});
 	} catch (error) {
-		console.error('Location detail fetch failed:', error);
 		return NextResponse.json({ error: 'Failed to fetch location details' }, { status: 500 });
 	}
 }

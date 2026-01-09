@@ -47,6 +47,7 @@ export async function ingestMetricEvents(
   const newEvents = events.filter((e) => !existingIdSet.has(e.eventId));
   const existingEvents = events.filter((e) => existingIdSet.has(e.eventId));
 
+
   const createdEventIds = newEvents.map((e) => e.eventId);
   const existingEventIds = existingEvents.map((e) => e.eventId);
 
@@ -121,6 +122,7 @@ export async function ingestMetricEvents(
     },
     { timeout: 30000 } // extra safety; createMany should already be much faster
   );
+
 
   return {
     processed: events.length,

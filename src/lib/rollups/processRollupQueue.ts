@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { recomputeDailyRollups } from '@/lib/rollups/recomputeDailyRollups';
+import { recomputeAndDetect } from '@/lib/rollups/recomputeDailyRollups';
 
 export async function processRollupQueueOnce(params?: { orgId?: string }) {
   const job = params?.orgId
@@ -10,7 +10,7 @@ export async function processRollupQueueOnce(params?: { orgId?: string }) {
 
   const { orgId, minDate, maxDate } = job;
 
-  const { upserted } = await recomputeDailyRollups({
+  const { upserted } = await recomputeAndDetect({
     orgId,
     startDate: minDate,
     endDate: maxDate,
